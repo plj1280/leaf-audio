@@ -19,7 +19,6 @@
 from typing import Union
 
 import gin
-from lingvo.core import spectrum_augmenter
 import tensorflow.compat.v2 as tf
 
 
@@ -146,51 +145,3 @@ class PCENLayer(tf.keras.layers.Layer):
     output = ((inputs / (self._floor + ema_smoother)**alpha + self.delta)
               **one_over_root - self.delta**one_over_root)
     return output
-
-
-@gin.configurable
-class SpecAugment(tf.keras.layers.Layer):
-  """A wrapper around lingo.core.spectrum_augmenter.SpectrumAugmenter .
-
-     SpecAugment is a data augmentation that combines three transformations:
-     - a time warping of up to max(time_warp_max_frames,
-     time_warp_max_ratio*input_length) frames.
-     - a masking of sampled frequencies with zeros along the entire time axis
-     (freq_mask)
-     - a masking of sampled timesteps with zeros along the entire frequency axis
-     (time_mask)
-     For the frequency mask, freq_mask_max_bins is the maximum number of
-     consecutive frequency bins to be masked, freq_mask_count is the number of
-     masks to apply to a signal. Same for time_mask.
-  """
-
-  def __init__(self,
-               freq_mask_max_bins: int = 10,
-               freq_mask_count: int = 2,
-               time_mask_max_frames: int = 10,
-               time_mask_count: int = 2,
-               time_mask_max_ratio: float = 1.0,
-               time_warp_max_frames: int = 8,
-               time_warp_max_ratio: float = 1.0):
-    super().__init__(name='SpecAugment')
-    spec_augment_params = spectrum_augmenter.SpectrumAugmenter.Params()
-    spec_augment_params.freq_mask_max_bins = freq_mask_max_bins
-    spec_augment_params.freq_mask_count = freq_mask_count
-    spec_augment_params.time_mask_max_frames = time_mask_max_frames
-    spec_augment_params.time_mask_count = time_mask_count
-    spec_augment_params.time_warp_max_frames = time_warp_max_frames
-    spec_augment_params.time_warp_max_ratio = time_warp_max_ratio
-    spec_augment_params.time_mask_max_ratio = time_mask_max_ratio
-    spec_augment_params.name = 'SpecAugmentLayer'
-    self.spec_augment_layer = spec_augment_params.Instantiate()
-
-  def call(self, inputs):
-    batch_size = tf.shape(inputs)[0]
-    num_time_bins = tf.shape(inputs)[1]
-    paddings = tf.zeros((batch_size, num_time_bins))
-    outputs = tf.expand_dims(inputs, axis=[3])
-    outputs = self.spec_augment_layer._AugmentationNetwork(  # pylint: disable=protected-access
-        inputs=outputs,
-        paddings=paddings,
-        global_seed=777)
-    return tf.squeeze(outputs, axis=[3])
